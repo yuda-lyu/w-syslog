@@ -1,6 +1,6 @@
 {
   "name": "w-syslog",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "dist/w-syslog.umd.js",
   "dependencies": {
     "lodash-es": "^4.17.21",

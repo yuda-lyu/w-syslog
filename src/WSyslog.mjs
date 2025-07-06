@@ -5,7 +5,7 @@ import isestr from 'wsemi/src/isestr.mjs'
 import pino from 'pino'
 
 
-// __dirname
+//__dirname
 let __filename = fileURLToPath(import.meta.url)
 let __dirname = path.dirname(__filename)
 
@@ -26,7 +26,7 @@ let __dirname = path.dirname(__filename)
  *
  * w.fsCleanFolder('./_logs')
  *
- * let log = await WSyslog()
+ * let log = WSyslog()
  * log.info({ event: 'runner', msg: 'start' })
  * log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
  * log.error({ event: 'crash', msg: 'db connection', code: 500 })
@@ -45,7 +45,7 @@ let __dirname = path.dirname(__filename)
  * // {"level":50,"time":1751780174415,"pid":24144,"hostname":"DESKTOP-6R7USAO","event":"crash","msg":"db connection","code":500}
  *
  */
-async function WSyslog(opt = {}) {
+function WSyslog(opt = {}) {
 
     //fdLog
     let fdLog = get(opt, 'fdLog')

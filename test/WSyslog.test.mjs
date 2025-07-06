@@ -11,7 +11,7 @@ describe('WSyslog', function() {
 
         w.fsCleanFolder('./_logs')
 
-        let log = await WSyslog()
+        let log = WSyslog()
         log.info({ event: 'runner', msg: 'start' })
         log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
         log.error({ event: 'crash', msg: 'db connection', code: 500 })
