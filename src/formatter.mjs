@@ -11,7 +11,7 @@ async function formatter(opt) {
     //fdLog
     let fdLog = get(opt, 'fdLog')
     if (!isestr(fdLog)) {
-        fdLog = './logs'
+        fdLog = './_logs'
     }
 
     //interval
