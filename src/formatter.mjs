@@ -25,15 +25,15 @@ async function formatter(opt) {
         fs.mkdirSync(fdLog, { recursive: true })
     }
 
-    let currentFileStream = null
-    let currentTimeKey = ''
+    let streamCurr = null
+    let keyCurr = ''
 
     let getTimeKey = () => {
         let d = new Date()
         if (interval === 'hr') {
-            return d.toISOString().slice(0, 13).replace(/:/g, '-') // e.g., 2025-07-06T14
+            return d.toISOString().slice(0, 13).replace(/:/g, '-') //例如2025-07-06T14
         }
-        return d.toISOString().slice(0, 10) // e.g., 2025-07-06
+        return d.toISOString().slice(0, 10) //例如2025-07-06
     }
 
     let getFilePath = (timeKey) => {
@@ -42,12 +42,12 @@ async function formatter(opt) {
     }
 
     let switchFileIfNeeded = () => {
-        let newKey = getTimeKey()
-        if (newKey !== currentTimeKey) {
-            currentTimeKey = newKey
-            let filePath = getFilePath(newKey)
-            if (currentFileStream) currentFileStream.end()
-            currentFileStream = fs.createWriteStream(filePath, { flags: 'a' })
+        let keyNew = getTimeKey()
+        if (keyNew !== keyCurr) {
+            keyCurr = keyNew
+            let filePath = getFilePath(keyNew)
+            if (streamCurr) streamCurr.end()
+            streamCurr = fs.createWriteStream(filePath, { flags: 'a' })
         }
     }
 
@@ -57,17 +57,26 @@ async function formatter(opt) {
     let stream = new Writable({
         write(chunk, encoding, callback) {
             try {
+
+                //switchFileIfNeeded
                 switchFileIfNeeded()
 
-                // 將 Buffer 轉為字串，確保正確處理換行
-                const str = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+                //str, 須偵測Buffer轉字串
+                let str = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
 
-                currentFileStream.write(str + '\n', callback)
+                //write
+                streamCurr.write(str, callback)
+
             }
             catch (err) {
                 callback(err)
             }
         }
+    })
+
+    //error
+    stream.on('error', (err) => {
+        console.error('formatter error', err)
     })
 
     return stream
