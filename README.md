@@ -24,7 +24,7 @@ import _ from 'lodash-es'
 import w from 'wsemi'
 import WSyslog from './src/WSyslog.mjs'
 
-w.fsCleanFolder('./logs')
+w.fsCleanFolder('./_logs')
 
 let log = await WSyslog()
 log.info({ event: 'runner', msg: 'start' })
@@ -33,7 +33,7 @@ log.error({ event: 'crash', msg: 'db connection', code: 500 })
 
 await w.delay(2000) //等待2秒讓pino能flush數據
 
-let vpfs = w.fsTreeFolder('./logs')
+let vpfs = w.fsTreeFolder('./_logs')
 // console.log('vpfs', vpfs)
 
 let fp = _.get(vpfs, `0.path`, '')

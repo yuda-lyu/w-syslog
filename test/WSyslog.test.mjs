@@ -9,7 +9,7 @@ describe('WSyslog', function() {
 
     it('test', async function() {
 
-        w.fsCleanFolder('./logs')
+        w.fsCleanFolder('./_logs')
 
         let log = await WSyslog()
         log.info({ event: 'runner', msg: 'start' })
@@ -18,7 +18,7 @@ describe('WSyslog', function() {
 
         await w.delay(2000) //等待2秒讓pino能flush數據
 
-        let vpfs = w.fsTreeFolder('./logs')
+        let vpfs = w.fsTreeFolder('./_logs')
         // console.log('vpfs', vpfs)
 
         let fp = _.get(vpfs, `0.path`, '')
