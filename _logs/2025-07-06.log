@@ -1,4 +1,4 @@
-{"level":30,"time":1751780651101,"pid":11684,"hostname":"DESKTOP-6R7USAO","event":"runner","msg":"start"}
-{"level":40,"time":1751780651102,"pid":11684,"hostname":"DESKTOP-6R7USAO","event":"monitor-memory","msg":"usage-high"}
-{"level":50,"time":1751780651102,"pid":11684,"hostname":"DESKTOP-6R7USAO","event":"crash","msg":"db connection","code":500}
+{"level":30,"time":1751780754861,"pid":12480,"hostname":"DESKTOP-6R7USAO","event":"runner","msg":"start"}
+{"level":40,"time":1751780754861,"pid":12480,"hostname":"DESKTOP-6R7USAO","event":"monitor-memory","msg":"usage-high","ratio":85.4}
+{"level":50,"time":1751780754861,"pid":12480,"hostname":"DESKTOP-6R7USAO","event":"crash","msg":"db connection","code":500}
 
