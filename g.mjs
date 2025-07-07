@@ -6,7 +6,7 @@ import WSyslog from './src/WSyslog.mjs'
 
 w.fsCleanFolder('./_logs')
 
-let log = WSyslog()
+let log = WSyslog({ interval: 'hr' })
 log.info({ event: 'runner', msg: 'start' })
 log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
 log.error({ event: 'crash', msg: 'db connection', code: 500 })

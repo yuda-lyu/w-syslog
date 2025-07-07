@@ -1,8 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import { Writable } from 'stream'
+import ot from 'dayjs'
 import get from 'lodash-es/get.js'
 import isestr from 'wsemi/src/isestr.mjs'
+import strleft from 'wsemi/src/strleft.mjs'
 
 
 async function formatter(opt) {
@@ -29,11 +31,16 @@ async function formatter(opt) {
     let keyCurr = ''
 
     let getTimeKey = () => {
-        let d = new Date()
+        // let d = new Date()
+        let t = ot().format('YYYY-MM-DDTHH:mm:ss.SSSZ')
         if (interval === 'hr') {
-            return d.toISOString().slice(0, 13).replace(/:/g, '-') //例如2025-07-06T14
+            // return d.toISOString().slice(0, 13).replace(/:/g, '-') //例如2025-07-06T14
+            t = strleft(t, 13)
+            return t
         }
-        return d.toISOString().slice(0, 10) //例如2025-07-06
+        // return d.toISOString().slice(0, 10) //例如2025-07-06
+        t = strleft(t, 10)
+        return t
     }
 
     let getFilePath = (timeKey) => {
