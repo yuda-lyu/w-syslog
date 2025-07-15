@@ -4,8 +4,6 @@
   "main": "dist/w-syslog.umd.js",
   "dependencies": {
     "lodash-es": "^4.17.21",
-    "node-disk-info": "^1.3.0",
-    "node-os-utils": "^1.3.7",
     "pino": "^9.7.0",
     "wsemi": "^1.8.11"
   },
