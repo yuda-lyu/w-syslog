@@ -76,7 +76,7 @@ function WSyslog(opt = {}) {
 
                 options: {
                     interval,
-                    logDir: fdLog,
+                    fdLog,
                 },
 
             },

@@ -1,3 +1,0 @@
-{"level":30,"time":1751895983722,"pid":17068,"hostname":"DESKTOP-6R7USAO","event":"runner","msg":"start"}
-{"level":40,"time":1751895983723,"pid":17068,"hostname":"DESKTOP-6R7USAO","event":"monitor-memory","msg":"usage-high","ratio":85.4}
-{"level":50,"time":1751895983723,"pid":17068,"hostname":"DESKTOP-6R7USAO","event":"crash","msg":"db connection","code":500}
