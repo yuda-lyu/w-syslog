@@ -12,10 +12,12 @@ A system monitor in nodejs.
 To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-syslog/WSyslog.html).
 
 ## Installation
+
 ### Using npm(ES6 module):
 ```alias
 npm i w-syslog
 ```
+
 #### Example
 > **Link:** [[dev source code](https://github.com/yuda-lyu/w-syslog/blob/master/g.mjs)]
 ```alias
