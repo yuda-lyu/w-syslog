@@ -2,9 +2,16 @@ import fs from 'fs'
 import path from 'path'
 import { Writable } from 'stream'
 import ot from 'dayjs'
+import utc from 'dayjs/plugin/utc.js'
+import timezone from 'dayjs/plugin/timezone.js'
 import get from 'lodash-es/get.js'
 import isestr from 'wsemi/src/isestr.mjs'
 import strleft from 'wsemi/src/strleft.mjs'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
+
+
+ot.extend(utc)
+ot.extend(timezone)
 
 
 async function formatter(opt) {
@@ -22,17 +29,19 @@ async function formatter(opt) {
         interval = 'day'
     }
 
-    // 建立 logs 資料夾
-    if (!fs.existsSync(fdLog)) {
-        fs.mkdirSync(fdLog, { recursive: true })
-    }
+    //timeZone, IANA時區字串如'Asia/Taipei', 為null時使用系統時區
+    let timeZone = get(opt, 'timeZone', null)
+
+    //建立logs資料夾, 已存在則視為成功, 不存在則自動建立
+    fsCreateFolder(fdLog)
 
     let streamCurr = null
     let keyCurr = ''
 
     let getTimeKey = () => {
-        // let d = new Date()
-        let t = ot().format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+        //依timeZone決定時區基準, 確保跨機器切檔邊界與檔名一致
+        let d = isestr(timeZone) ? ot().tz(timeZone) : ot()
+        let t = d.format('YYYY-MM-DDTHH:mm:ss.SSSZ')
         if (interval === 'hr') {
             // return d.toISOString().slice(0, 13).replace(/:/g, '-') //例如2025-07-06T14
             t = strleft(t, 13)

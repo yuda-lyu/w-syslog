@@ -47,4 +47,11 @@ describe('WSyslog', function() {
         assert.strict.deepEqual(r, rr)
     })
 
+    after(async function() {
+        //稍候pino worker flush, 避免Windows上EBUSY
+        await w.delay(200)
+        //完全移除測試資料夾, 不留空殼
+        w.fsDeleteFolder('./_logs')
+    })
+
 })
