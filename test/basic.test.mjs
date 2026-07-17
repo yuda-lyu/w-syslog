@@ -16,7 +16,7 @@ describe('WSyslog', function() {
         log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
         log.error({ event: 'crash', msg: 'db connection', code: 500 })
 
-        await w.delay(2000) //等待2秒讓pino能flush數據
+        await log.clear() //顯式關閉, 保證殘餘log已全數寫出
 
         let vpfs = w.fsTreeFolder('./_logs')
         // console.log('vpfs', vpfs)
@@ -48,9 +48,7 @@ describe('WSyslog', function() {
     })
 
     after(async function() {
-        //稍候pino worker flush, 避免Windows上EBUSY
-        await w.delay(200)
-        //完全移除測試資料夾, 不留空殼
+        //clear已保證worker收攤與fd釋放, 直接移除測試資料夾, 不留空殼
         w.fsDeleteFolder('./_logs')
     })
 

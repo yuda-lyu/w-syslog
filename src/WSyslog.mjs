@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import get from 'lodash-es/get.js'
 import evem from 'wsemi/src/evem.mjs'
+import genPm from 'wsemi/src/genPm.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
 import cint from 'wsemi/src/cint.mjs'
@@ -24,7 +25,7 @@ let __dirname = path.dirname(__filename)
  * @param {String} [opt.interval='day'] 輸入儲存log時分檔模式字串，可選'day'、'hr'，分別代表每日或每時分檔，預設'day'
  * @param {String} [opt.timeZone=null] 輸入時區字串（IANA格式如'Asia/Taipei'、'UTC'），用於決定切檔邊界與檔名，預設null代表使用系統時區
  * @param {Number} [opt.numKeep] 輸入保留log檔案數量整數，超出最舊檔將被自動刪除，預設於day模式為365、hr模式為365*24（約等同保留一年）
- * @returns {Object} 回傳log物件，提供fatal、error、warn、info、debug、trace紀錄函數，cleanLogs手動清理函數，及clear清理計時器函數
+ * @returns {Object} 回傳log物件，提供fatal、error、warn、info、debug、trace紀錄函數，cleanLogs手動清理函數，及clear顯式關閉函數（回傳Promise，將殘餘log全部寫出後終止transport worker並停止清理計時器，附逾時保險預設60000ms可由opt.timeLimit調整，冪等；clear之後不可再呼叫任何log方法）
  * @example
  * import fs from 'fs'
  * import _ from 'lodash-es'
@@ -38,7 +39,7 @@ let __dirname = path.dirname(__filename)
  * log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
  * log.error({ event: 'crash', msg: 'db connection', code: 500 })
  *
- * await w.delay(2000) //等待2秒讓pino能flush數據
+ * await log.clear() //顯式關閉, flush殘餘log並終止transport worker, 之後不可再呼叫log方法
  *
  * let vpfs = w.fsTreeFolder('./_logs')
  * // console.log('vpfs', vpfs)
@@ -155,9 +156,54 @@ function WSyslog(opt = {}) {
     //unref不阻塞process結束
     t.unref()
 
-    //clear
-    let clear = () => {
-        clearInterval(t)
+    //clear, 顯式關閉: flush殘餘log -> 終止transport worker -> 停止cleanLogs計時器, 附逾時保險保證必定resolve
+    //clear之後不可再呼叫任何log方法(pino會非同步丟the worker has exited)
+    let pm = null
+    let clear = (optClear = {}) => {
+        if (pm !== null) {
+            return pm //冪等
+        }
+        let timeLimit = get(optClear, 'timeLimit')
+        if (!ispint(timeLimit)) {
+            timeLimit = 60 * 1000
+        }
+        pm = genPm()
+        let done = false
+        let fin = () => {
+            if (!done) {
+                done = true
+                clearInterval(t) //併停cleanLogs計時器
+                pm.resolve()
+            }
+        }
+        let tt = setTimeout(() => {
+            try {
+                transport.worker.terminate() //保險: 逾時直接終結worker
+            }
+            catch (err) {}
+            fin()
+        }, timeLimit)
+        try {
+            log.flush((err) => {
+                //worker已亡或transport已關閉時'close'事件可能已發過, 直接收尾避免空等逾時
+                if (err || transport.closed) {
+                    clearTimeout(tt)
+                    fin()
+                    return
+                }
+                //'close'事件於worker真正退出(MessagePort釋放)後才發出, 等'finish'不足以保證
+                transport.once('close', () => {
+                    clearTimeout(tt)
+                    fin()
+                })
+                transport.end()
+            })
+        }
+        catch (err) {
+            clearTimeout(tt)
+            fin()
+        }
+        return pm
     }
 
     //wrap, 包裝pino各等級method, 於寫log前先觸發'log'事件, 使外部可監聽進行console輸出或轉送其他記錄器

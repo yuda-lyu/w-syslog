@@ -33,7 +33,7 @@ log.info({ event: 'runner', msg: 'start' })
 log.warn({ event: 'monitor-memory', msg: 'usage-high', ratio: 85.4 })
 log.error({ event: 'crash', msg: 'db connection', code: 500 })
 
-await w.delay(2000) //等待2秒讓pino能flush數據
+await log.clear() //顯式關閉, flush殘餘log並終止transport worker, 之後不可再呼叫log方法
 
 let vpfs = w.fsTreeFolder('./_logs')
 // console.log('vpfs', vpfs)

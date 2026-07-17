@@ -87,6 +87,15 @@ async function formatter(opt) {
             catch (err) {
                 callback(err)
             }
+        },
+        final(callback) {
+            //顯式關閉時將當前fs write stream flush並關閉, 確保worker退出前資料落盤且fd釋放
+            if (streamCurr) {
+                streamCurr.end(callback)
+            }
+            else {
+                callback()
+            }
         }
     })
 

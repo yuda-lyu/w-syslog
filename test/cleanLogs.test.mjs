@@ -34,20 +34,17 @@ describe('WSyslog cleanLogs', function() {
         w.fsDeleteFolder(fdLog)
     })
 
-    afterEach(async function() {
-        //稍候pino worker flush, 避免Windows上EBUSY
-        await w.delay(100)
-        //完全移除測試資料夾, 不留空殼
+    afterEach(function() {
+        //clear已保證worker收攤與fd釋放, 直接移除測試資料夾, 不留空殼
         w.fsDeleteFolder(fdLog)
     })
 
-    after(async function() {
+    after(function() {
         //最終把'資料夾不存在時不崩'測試可能由pino formatter建立的資料夾也清掉
-        await w.delay(100)
         w.fsDeleteFolder(fdNoExist)
     })
 
-    it('day模式: 保留最新numKeep個檔, 最舊的被刪', function() {
+    it('day模式: 保留最新numKeep個檔, 最舊的被刪', async function() {
         seedFiles(fdLog, [
             '2020-01-01.log',
             '2020-01-02.log',
@@ -65,10 +62,10 @@ describe('WSyslog cleanLogs', function() {
             '2020-01-05.log',
         ])
 
-        log.clear()
+        await log.clear()
     })
 
-    it('當檔數小於等於numKeep時不刪任何檔', function() {
+    it('當檔數小於等於numKeep時不刪任何檔', async function() {
         seedFiles(fdLog, [
             '2020-01-01.log',
             '2020-01-02.log',
@@ -83,10 +80,10 @@ describe('WSyslog cleanLogs', function() {
             '2020-01-02.log',
         ])
 
-        log.clear()
+        await log.clear()
     })
 
-    it('hr模式: 只匹配hr命名, 不誤刪day命名', function() {
+    it('hr模式: 只匹配hr命名, 不誤刪day命名', async function() {
         seedFiles(fdLog, [
             //day命名(不該被hr模式cleanLogs動到)
             '2020-01-01.log',
@@ -115,10 +112,10 @@ describe('WSyslog cleanLogs', function() {
             '2020-01-01T05.log',
         ])
 
-        log.clear()
+        await log.clear()
     })
 
-    it('刪除時觸發delete事件, payload含fp與fn', function() {
+    it('刪除時觸發delete事件, payload含fp與fn', async function() {
         //先啟動空資料夾的logger, 此時init的cleanLogs不會刪任何檔
         let log = WSyslog({ fdLog, numKeep: 5, interval: 'hr' })
 
@@ -159,22 +156,23 @@ describe('WSyslog cleanLogs', function() {
             assert.strict.equal(d.fp, path.join(fdLog, d.fn))
         }
 
-        log.clear()
+        await log.clear()
     })
 
-    it('資料夾不存在時不崩', function() {
+    it('資料夾不存在時不崩', async function() {
         //確保起始狀態為不存在
         w.fsDeleteFolder(fdNoExist)
 
+        let log = null
         assert.doesNotThrow(() => {
-            let log = WSyslog({ fdLog: fdNoExist, numKeep: 5, interval: 'day' })
+            log = WSyslog({ fdLog: fdNoExist, numKeep: 5, interval: 'day' })
             log.cleanLogs()
-            log.clear()
         })
+        await log.clear()
         //pino formatter可能async建立資料夾, 由describe區塊的after hook統一清理
     })
 
-    it('忽略不符regex命名的檔', function() {
+    it('忽略不符regex命名的檔', async function() {
         seedFiles(fdLog, [
             '2020-01-01.log',
             '2020-01-02.log',
@@ -209,7 +207,7 @@ describe('WSyslog cleanLogs', function() {
             .sort()
         assert.strict.deepEqual(matching, ['2020-01-03.log'])
 
-        log.clear()
+        await log.clear()
     })
 
 })

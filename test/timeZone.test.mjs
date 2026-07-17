@@ -28,9 +28,8 @@ describe('WSyslog timeZone', function() {
         w.fsDeleteFolder(fdLogTpe)
     })
 
-    afterEach(async function() {
-        //稍候pino worker flush, 避免Windows上EBUSY
-        await w.delay(200)
+    afterEach(function() {
+        //clear已保證worker收攤與fd釋放, 直接移除測試資料夾
         w.fsDeleteFolder(fdLogUtc)
         w.fsDeleteFolder(fdLogTpe)
     })
@@ -40,7 +39,7 @@ describe('WSyslog timeZone', function() {
         let log = WSyslog({ fdLog: fdLogUtc, interval: 'hr', timeZone: 'UTC' })
         log.info({ event: 'tz-utc', msg: 'check' })
 
-        await w.delay(2000) //等pino flush
+        await log.clear() //顯式關閉, 保證殘餘log已全數寫出
 
         let actualKey = readHrKey(fdLogUtc)
         assert.ok(actualKey !== null, `應有1個hr log檔, 取得actualKey=${actualKey}`)
@@ -54,8 +53,6 @@ describe('WSyslog timeZone', function() {
             actualKey === utcKey || actualKey === utcKeyPrev,
             `actualKey="${actualKey}" 應為UTC當前小時"${utcKey}"或前一小時"${utcKeyPrev}"`
         )
-
-        log.clear()
     })
 
     it('timeZone="UTC" 與 "Asia/Taipei" (UTC+8) 寫log應產生不同小時檔名', async function() {
@@ -67,7 +64,8 @@ describe('WSyslog timeZone', function() {
         logUtc.info({ msg: 'x' })
         logTpe.info({ msg: 'x' })
 
-        await w.delay(2000)
+        await logUtc.clear()
+        await logTpe.clear()
 
         let keyUtc = readHrKey(fdLogUtc)
         let keyTpe = readHrKey(fdLogTpe)
@@ -81,9 +79,6 @@ describe('WSyslog timeZone', function() {
             keyTpe,
             `UTC與Asia/Taipei檔名應不同: keyUtc="${keyUtc}", keyTpe="${keyTpe}"`
         )
-
-        logUtc.clear()
-        logTpe.clear()
     })
 
 })
