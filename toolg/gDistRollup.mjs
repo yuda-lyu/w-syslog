@@ -12,12 +12,18 @@ rollupFiles({
     fdTar,
     nameDistType: 'kebabCase',
     globals: {
-        'node-disk-info': 'node-disk-info',
-        'node-os-utils': 'node-os-utils',
+        'path': 'path',
+        'fs': 'fs',
+        'stream': 'stream',
+        'url': 'url',
+        'pino': 'pino',
     },
     external: [
-        'node-disk-info',
-        'node-os-utils',
+        'path',
+        'fs',
+        'stream',
+        'url',
+        'pino',
     ],
 })
 

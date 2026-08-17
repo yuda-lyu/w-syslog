@@ -1,5 +1,5 @@
-import fs from 'fs'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import get from 'lodash-es/get.js'
 import evem from 'wsemi/src/evem.mjs'

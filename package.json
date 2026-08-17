@@ -1,6 +1,6 @@
 {
   "name": "w-syslog",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "main": "dist/w-syslog.umd.js",
   "dependencies": {
     "pino": "^10.3.1",
