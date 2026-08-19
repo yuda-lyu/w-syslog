@@ -1,13 +1,13 @@
 {
   "name": "w-syslog",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "main": "dist/w-syslog.umd.js",
   "dependencies": {
     "pino": "^10.3.1",
-    "wsemi": "^1.8.77"
+    "wsemi": "^1.8.78"
   },
   "devDependencies": {
-    "w-package-tools": "^1.1.13"
+    "w-package-tools": "^1.1.14"
   },
   "scripts": {
     "test": "mocha --parallel --timeout 60000",
