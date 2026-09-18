@@ -1,10 +1,10 @@
 {
   "name": "w-syslog",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "main": "dist/w-syslog.umd.js",
   "dependencies": {
     "pino": "^10.3.1",
-    "wsemi": "^1.9.0"
+    "wsemi": "^1.9.1"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.16"
