@@ -29,7 +29,7 @@
 <nav >
     
     
-    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="WSyslog.html">WSyslog</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="WSyslog.html">WSyslog</a></li></ul><h3>Global</h3><ul><li><a href="global.html#resolveFormatter">resolveFormatter</a></li></ul>
     
 </nav>
 
@@ -47,20 +47,44 @@
         <article>
             <pre class="prettyprint source linenums"><code>import path from 'path'
 import fs from 'fs'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import get from 'lodash-es/get.js'
 import evem from 'wsemi/src/evem.mjs'
 import genPm from 'wsemi/src/genPm.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
 import cint from 'wsemi/src/cint.mjs'
-import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import pino from 'pino'
+import resolveFormatter from './resolveFormatter.mjs'
 
 
-//__dirname
-let __filename = fileURLToPath(import.meta.url)
-let __dirname = path.dirname(__filename)
+//fpFormatter, transport worker目標formatter.mjs之實體路徑, 首次WSyslog()時解析並快取, 解析失敗不快取(規則帳本R3、R4)
+//不可於頂層宣告__filename/__dirname: rollup輸出umd/cjs時以引用__filename之墊片取代import.meta.url且不避讓該名, 同名頂層宣告(本檔或同一bundle內任一模組)使載入即TDZ(R1);
+//亦不可改用import.meta.dirname/filename/resolve, umd/cjs輸出會換成undefined(R2)
+let fpFormatter = ''
+let getFpFormatter = () => {
+    if (fpFormatter === '') {
+        fpFormatter = resolveFormatter({ fpSelf: fileURLToPath(import.meta.url), cwd: process.cwd() }).fp
+    }
+    return fpFormatter
+}
+
+
+//EVENT_FORMATTER_ERROR, formatter(worker內)經thread-stream之EVENT協定回報寫檔錯誤之事件名, 須與src/formatter.mjs一致;
+//屬跨版契約(規則帳本R6), 不可為'error'(舊版主緒無監聽時EventEmitter會拋)
+let EVENT_FORMATTER_ERROR = 'wsyslogFormatterError'
+
+
+//isFolder, 資料夾判定須跟隨junction/symlink(規則帳本R14), wsemi之fsIsFolder以lstat判定, 連結回false
+let isFolder = (fd) => {
+    try {
+        return fs.statSync(fd).isDirectory()
+    }
+    catch (err) {
+        return false
+    }
+}
 
 
 /**
@@ -72,7 +96,7 @@ let __dirname = path.dirname(__filename)
  * @param {String} [opt.interval='day'] 輸入儲存log時分檔模式字串，可選'day'、'hr'，分別代表每日或每時分檔，預設'day'
  * @param {String} [opt.timeZone=null] 輸入時區字串（IANA格式如'Asia/Taipei'、'UTC'），用於決定切檔邊界與檔名，預設null代表使用系統時區
  * @param {Number} [opt.numKeep] 輸入保留log檔案數量整數，超出最舊檔將被自動刪除，預設於day模式為365、hr模式為365*24（約等同保留一年）
- * @returns {Object} 回傳log物件，提供fatal、error、warn、info、debug、trace紀錄函數，cleanLogs手動清理函數，及clear顯式關閉函數（回傳Promise，將殘餘log全部寫出後終止transport worker並停止清理計時器，附逾時保險預設60000ms可由opt.timeLimit調整，冪等；clear之後不可再呼叫任何log方法）
+ * @returns {Object} 回傳log物件，提供fatal、error、warn、info、debug、trace紀錄函數，cleanLogs手動清理函數，及clear顯式關閉函數（回傳Promise，將殘餘log寫出後結束transport worker並停止清理計時器，附逾時保險預設60000ms可由opt.timeLimit調整，逾時時直接終止worker、可能遺失尚未寫出之log並記於stderr，冪等；clear之後不可再呼叫任何log方法：clear進行中（尚未resolve）呼叫者不會寫出並觸發'writeError'事件，clear完成後呼叫者宿主會因worker已結束而拋錯）。log物件為事件物件：呼叫各等級紀錄函數時觸發同名事件（payload為{ args }），cleanLogs刪檔時觸發'delete'事件（payload為{ fp, fn }）；建立時之首次清理於WSyslog回傳後之下一個事件迴圈輪次執行，建立後立即掛上之監聽器可收到其事件，於此之前即呼叫clear者不執行首次清理；clear被呼叫後即停止自動清理（手動cleanLogs不受限）；寫檔失敗或transport出錯時不終止宿主，改觸發'writeError'事件（payload為Error物件；無人監聽時不拋）並記於stderr；'error'事件只代表呼叫error函數，不承載寫檔失敗。opt.fdLog不可建立、opt.timeZone無效、formatter解析不到、或pino被以瀏覽器版打包時，WSyslog同步拋錯
  * @example
  * import fs from 'fs'
  * import _ from 'lodash-es'
@@ -132,6 +156,33 @@ function WSyslog(opt = {}) {
     }
     numKeep = cint(numKeep)
 
+    //pino須為node版(規則帳本R5): 打包時須把pino列external, 瀏覽器版pino無transport
+    if (typeof pino.transport !== 'function') {
+        throw new Error('w-syslog: pino.transport is not a function, pino seems to be bundled as its browser build; list "pino" in external when bundling')
+    }
+
+    //timeZone須為有效IANA時區(R12), 否則於worker內RangeError, 於此同步拋錯
+    if (isestr(timeZone)) {
+        try {
+            Intl.DateTimeFormat('en-US', { timeZone })
+        }
+        catch (err) {
+            throw new Error(`w-syslog: invalid timeZone[${timeZone}]`)
+        }
+    }
+
+    //fdLogAbs, fdLog於建立時解析為絕對路徑一次, 主緒cleanLogs與formatter共用, 不隨呼叫端之後之chdir改變(R17)
+    let fdLogAbs = path.resolve(fdLog)
+
+    //fdLog須可建立, 不可建立則同步拋錯(R8、R12)
+    fsCreateFolder(fdLogAbs)
+    if (!isFolder(fdLogAbs)) {
+        throw new Error(`w-syslog: can not create fdLog[${fdLog}]`)
+    }
+
+    //fpTarget, transport worker目標, 解析不到時同步拋錯(R4)
+    let fpTarget = getFpFormatter()
+
     // 建立 logger，使用自訂 transport
     let transport = pino.transport({
         targets: [
@@ -145,11 +196,12 @@ function WSyslog(opt = {}) {
                 // trace: 10
                 level: 'info', //僅紀錄info(30)以上
 
-                target: path.resolve(__dirname, './formatter.mjs'),
+                //給file URL(R13): pino對非file://之target以'file://'+字串相接未編碼, 路徑含%zz等即URIError
+                target: pathToFileURL(fpTarget).href,
 
                 options: {
                     interval,
-                    fdLog,
+                    fdLog: fdLogAbs,
                     timeZone,
                 },
 
@@ -157,21 +209,59 @@ function WSyslog(opt = {}) {
         ]
     })
 
+    //建立後即unref(R10): thread-stream 4.2.0於worker READY前大量寫入時ready可能永不成立, pino於ready時才unref, 行程將無法自然結束
+    transport.unref()
+
+    //寫檔失敗與transport錯誤之政策(R8): 不終止宿主, 轉發為ev之'writeError'事件(payload為Error)並記於stderr
+    //不可用'error': 其為呼叫log.error()之等級事件(payload為{ args }), 一個事件名只能有一種來源與payload(R19)
+    let dead = false
+    let emitWriteError = (err) => {
+        try {
+            ev.emit('writeError', err)
+        }
+        catch (e) {
+            //容忍listener內部錯誤
+        }
+    }
+    let onTransportError = (err) => {
+        //transport致命錯誤(worker已結束), 之後不再寫入pino, 避免每筆log皆報錯
+        dead = true
+        console.error('w-syslog transport error:', err)
+        emitWriteError(err)
+    }
+    let onFormatterError = (info) => {
+        //formatter回報之寫檔錯誤, stderr已由worker記錄
+        let err = new Error(get(info, 'message', 'w-syslog formatter error'))
+        err.code = get(info, 'code')
+        err.syscall = get(info, 'syscall')
+        err.path = get(info, 'path')
+        emitWriteError(err)
+    }
+    transport.on('error', onTransportError)
+    transport.on(EVENT_FORMATTER_ERROR, onFormatterError)
+
+    //detach, 移除主緒監聽, 使clear後再寫log維持終止宿主(R8規則四, clear之後不可再呼叫log方法)
+    let detach = () => {
+        transport.off('error', onTransportError)
+        transport.off(EVENT_FORMATTER_ERROR, onFormatterError)
+    }
+
     //log
     let log = pino(transport)
     // console.log('log', log)
 
     //cleanLogs, 依numKeep保留最新N個檔, 超出的最舊檔刪除
+    //讀刪一律用fdLogAbs(R17), 'delete'事件之fp維持path.join(原fdLog, fn)以相容
     let cleanLogs = () => {
         try {
-            if (!fsIsFolder(fdLog)) {
+            if (!isFolder(fdLogAbs)) {
                 return
             }
             //pattern, day模式為'YYYY-MM-DD.log', hr模式為'YYYY-MM-DDTHH.log'
             let pattern = (interval === 'hr')
                 ? /^\d{4}-\d{2}-\d{2}T\d{2}\.log$/
                 : /^\d{4}-\d{2}-\d{2}\.log$/
-            let files = fs.readdirSync(fdLog).filter((fn) => pattern.test(fn))
+            let files = fs.readdirSync(fdLogAbs).filter((fn) => pattern.test(fn))
             //ISO日期格式字典序等同時間序, 排序後最舊在前
             files.sort()
             let nDel = files.length - numKeep
@@ -182,7 +272,7 @@ function WSyslog(opt = {}) {
             for (let fn of toDelete) {
                 let fp = path.join(fdLog, fn)
                 try {
-                    fs.unlinkSync(fp)
+                    fs.unlinkSync(path.join(fdLogAbs, fn))
                     ev.emit('delete', { fp, fn })
                 }
                 catch (err) {
@@ -195,21 +285,39 @@ function WSyslog(opt = {}) {
         }
     }
 
-    //啟動時立刻清理一次, 確保短命腳本也能執行清理
-    cleanLogs()
+    //首次清理延後到WSyslog()回傳之後的下一個事件迴圈輪次(R20), 使建立後立即掛上之'delete'監聽器能收到首批事件
+    //用setImmediate: 晚於本輪同步碼與其後全部microtask(含await已完成之Promise), 同步或經此類await掛上之監聽器皆來得及;
+    //process.nextTick/queueMicrotask會先於await之後續執行而錯過, setTimeout(0)有最小延遲且與I/O、setImmediate之先後不定
+    //不unref: 建立後即結束之短命腳本仍會清理一次, Immediate只撐到下一輪不使行程懸置; clear()時取消(stopAutoClean)
+    let tFirst = setImmediate(() => {
+        tFirst = null
+        cleanLogs()
+    })
 
     //之後每小時清理一次, 足以跟上day/hr切檔節奏
     let t = setInterval(cleanLogs, 60 * 60 * 1000)
     //unref不阻塞process結束
     t.unref()
 
-    //clear, 顯式關閉: flush殘餘log -> 終止transport worker -> 停止cleanLogs計時器, 附逾時保險保證必定resolve
-    //clear之後不可再呼叫任何log方法(pino會非同步丟the worker has exited)
+    //stopAutoClean, 停止全部自動清理(尚未執行之首次清理與每小時清理), 由clear()呼叫時同步執行,
+    //之後不再自動刪檔或發'delete'事件, 亦不留懸置之計時器(R20); 手動cleanLogs()不受限
+    let stopAutoClean = () => {
+        if (tFirst !== null) {
+            clearImmediate(tFirst)
+            tFirst = null
+        }
+        clearInterval(t)
+    }
+
+    //clear, 顯式關閉: 停止自動清理(呼叫時即停) -> 寫出殘餘log -> 結束transport worker, 附逾時保險保證必定resolve
+    //clear之後不可再呼叫任何log方法: clear進行中呼叫者不寫出且觸發'writeError'(thread-stream報the worker is ending),
+    //clear完成後呼叫者因主緒監聽已移除, pino會非同步丟the worker has exited而終止宿主(R21)
     let pm = null
     let clear = (optClear = {}) => {
         if (pm !== null) {
             return pm //冪等
         }
+        stopAutoClean() //呼叫時即停止自動清理, 延後中之首次清理一併取消(R20)
         let timeLimit = get(optClear, 'timeLimit')
         if (!ispint(timeLimit)) {
             timeLimit = 60 * 1000
@@ -219,32 +327,41 @@ function WSyslog(opt = {}) {
         let fin = () => {
             if (!done) {
                 done = true
-                clearInterval(t) //併停cleanLogs計時器
+                //移除主緒監聽須待transport已close且再隔一個setImmediate: 逾時分支terminate後之'error'仍須被接住(R11),
+                //thread-stream之destroy以setImmediate排'error', 但'close'可能經promise(microtask)先發出
+                if (transport.closed) {
+                    setImmediate(detach)
+                }
+                else {
+                    transport.once('close', () => {
+                        setImmediate(detach)
+                    })
+                }
                 pm.resolve()
             }
         }
         let tt = setTimeout(() => {
+            console.error('w-syslog clear: timeout, worker terminated, some logs may be lost')
             try {
-                transport.worker.terminate() //保險: 逾時直接終結worker
+                transport.worker.terminate() //保險: 逾時直接終結worker, 主緒之'error'監聽此時仍在(R11)
             }
             catch (err) {}
             fin()
         }, timeLimit)
         try {
-            log.flush((err) => {
-                //worker已亡或transport已關閉時'close'事件可能已發過, 直接收尾避免空等逾時
-                if (err || transport.closed) {
-                    clearTimeout(tt)
-                    fin()
-                    return
-                }
-                //'close'事件於worker真正退出(MessagePort釋放)後才發出, 等'finish'不足以保證
-                transport.once('close', () => {
-                    clearTimeout(tt)
-                    fin()
-                })
-                transport.end()
+            //worker已亡或transport已關閉時'close'事件可能已發過, 直接收尾避免空等逾時
+            if (transport.closed || transport.destroyed) {
+                clearTimeout(tt)
+                fin()
+                return pm
+            }
+            //不經log.flush(cb)(R9): flush(cb)須等transport之ready, 而thread-stream 4.2.0於worker READY前大量寫入時ready可能永不成立; end()不依賴ready且內含flushSync
+            //'close'事件於worker真正退出(MessagePort釋放)後才發出, 等'finish'不足以保證
+            transport.once('close', () => {
+                clearTimeout(tt)
+                fin()
             })
+            transport.end()
         }
         catch (err) {
             clearTimeout(tt)
@@ -268,6 +385,9 @@ function WSyslog(opt = {}) {
             }
             catch (err) {
                 //容忍listener內部錯誤, 避免影響pino寫log
+            }
+            if (dead) {
+                return //transport已致命出錯(已轉發為'writeError'事件), 不再寫入pino(R8)
             }
             fn(...args)
         }
@@ -300,7 +420,7 @@ export default WSyslog
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Oct 11 2026 12:50:36 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Oct 14 2026 07:28:46 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
