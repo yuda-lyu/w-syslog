@@ -1,0 +1,78 @@
+import fs from 'fs'
+import path from 'path'
+import { createRequire } from 'module'
+
+
+//名稱與目標
+let NAME = 'w-syslog'
+let TARGET = 'w-syslog/src/formatter.mjs'
+
+
+//isPkgRoot, 資料夾內之package.json其name是否為本套件
+let isPkgRoot = (fd) => {
+    try {
+        let j = JSON.parse(fs.readFileSync(path.join(fd, 'package.json'), 'utf8'))
+        return j.name === NAME
+    }
+    catch (err) {
+        return false
+    }
+}
+
+
+/**
+ * 解析transport worker目標formatter.mjs之實體路徑
+ *
+ * 依序: (a)本模組上一層為本套件根(驗package.json之name)則取其src/formatter.mjs, 涵蓋src與dist之直接使用;
+ * (b)由本模組位置以模組解析取得已安裝之w-syslog/src/formatter.mjs, 涵蓋被下游打包(本模組位置即下游bundle);
+ * (c)同上但由cwd解析, 涵蓋bundle被搬離其node_modules樹之情形; (d)皆失敗則拋錯, 訊息含已試位置與指引.
+ * 以自身套件名解析在本套件repo內必失敗(package.json無exports不能自我參照), 故(a)須在前
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.fpSelf 輸入呼叫端模組之檔案路徑字串(未打包時為src/WSyslog.mjs, 被打包時為bundle檔)
+ * @param {String} opt.cwd 輸入工作目錄字串
+ * @returns {Object} 回傳物件，fp為formatter.mjs之絕對路徑字串，by為取得方式字串，可為'pkgRoot'、'resolveFromSelf'、'resolveFromCwd'
+ * @example
+ *
+ * import resolveFormatter from './src/resolveFormatter.mjs'
+ *
+ * let r = resolveFormatter({ fpSelf: 'D:\\my-proj\\node_modules\\w-syslog\\src\\WSyslog.mjs', cwd: process.cwd() })
+ * console.log(r)
+ * // => { fp: 'D:\\my-proj\\node_modules\\w-syslog\\src\\formatter.mjs', by: 'pkgRoot' }
+ *
+ */
+function resolveFormatter(opt = {}) {
+    let fpSelf = opt.fpSelf
+    let cwd = opt.cwd
+    let tried = []
+
+    //(a) 本模組上一層為本套件根
+    let fdRoot = path.dirname(path.dirname(fpSelf))
+    let fpRoot = path.join(fdRoot, 'src', 'formatter.mjs')
+    if (isPkgRoot(fdRoot) && fs.existsSync(fpRoot)) {
+        return { fp: fpRoot, by: 'pkgRoot' }
+    }
+    tried.push(`package root of ${fpSelf}`)
+
+    //(b) 由本模組位置模組解析
+    try {
+        return { fp: createRequire(fpSelf).resolve(TARGET), by: 'resolveFromSelf' }
+    }
+    catch (err) {
+        tried.push(`resolve from ${fpSelf}`)
+    }
+
+    //(c) 由cwd模組解析
+    try {
+        return { fp: createRequire(path.join(cwd, 'index.js')).resolve(TARGET), by: 'resolveFromCwd' }
+    }
+    catch (err) {
+        tried.push(`resolve from ${cwd}`)
+    }
+
+    //(d) 皆失敗
+    throw new Error(`w-syslog: can not resolve transport target ${TARGET}, tried: ${tried.join('; ')}. When bundling, keep w-syslog installed and list "pino" in external`)
+}
+
+
+export default resolveFormatter
