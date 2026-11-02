@@ -3,11 +3,8 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import { execFile } from 'child_process'
-import rollupFiles from 'w-package-tools/src/rollupFiles.mjs'
+import { execFile, spawn } from 'child_process'
 import rollupFile from 'w-package-tools/src/rollupFile.mjs'
-import getFiles from 'w-package-tools/src/getFiles.mjs'
-import optRollup from '../../toolg/distRollupOpt.mjs'
 
 
 //fdRepo, 本repo根目錄
@@ -83,17 +80,34 @@ function copyPkg(fdPkg) {
 }
 
 
-//buildPkg, 以與toolg/gDistRollup.mjs相同之設定(toolg/distRollupOpt.mjs)把套件副本之src建到其dist
+//runScript, 以子程序(spawn, cwd=fdCwd, 隱藏視窗)執行node腳本, 回傳{ code, stdout, stderr }; 與發布列相同, 腳本以相對cwd之路徑讀寫
+function runScript(fdCwd, fpScript) {
+    return new Promise((resolve) => {
+        let stdout = ''
+        let stderr = ''
+        let p = spawn(process.execPath, [fpScript], { cwd: fdCwd, windowsHide: true })
+        p.stdout.on('data', (b) => {
+            stdout += b
+        })
+        p.stderr.on('data', (b) => {
+            stderr += b
+        })
+        p.on('error', (err) => {
+            resolve({ code: null, stdout, stderr: stderr + String(err) })
+        })
+        p.on('close', (code) => {
+            resolve({ code, stdout, stderr })
+        })
+    })
+}
+
+
+//buildPkg, 把套件副本(package.json、src、toolg)置於fdPkg, 並以fdPkg為cwd原樣執行其toolg/gDistRollup.mjs(同發布列)建出dist; 回傳{ code, stdout, stderr }, 由呼叫端斷言
+//副本位於test/_tmp之下, 其toolg內之w-package-tools由上層本repo之node_modules解析
 async function buildPkg(fdPkg) {
     copyPkg(fdPkg)
-    let fdSrc = path.join(fdPkg, 'src')
-    await rollupFiles({
-        fns: getFiles(fdSrc),
-        fdSrc,
-        fdTar: path.join(fdPkg, 'dist'),
-        ...optRollup,
-        bLog: false,
-    })
+    fs.cpSync(path.join(fdRepo, 'toolg'), path.join(fdPkg, 'toolg'), { recursive: true })
+    return runScript(fdPkg, path.join('toolg', 'gDistRollup.mjs'))
 }
 
 

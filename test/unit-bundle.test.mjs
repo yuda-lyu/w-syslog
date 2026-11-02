@@ -1,11 +1,12 @@
 import fs from 'fs'
 import path from 'path'
 import assert from 'assert'
-import { createRequire } from 'module'
+import { createRequire, builtinModules } from 'module'
 import kit from './tools/kit.mjs'
 
 
 //由目前src建出之dist與下游打包之載入與落地(規則帳本R1~R5、R7、R16; 使用方式U2~U9)
+//dist由套件副本(package.json、src、toolg)並以副本為cwd原樣執行toolg/gDistRollup.mjs建出(同發布列, 規則帳本R7)
 //斷言一律含「log檔內有該筆」, 只驗可載入會誤判(只改名之變體可載入但建立logger後約0.1秒崩潰)
 
 
@@ -17,6 +18,15 @@ let fdLogs = path.join(fdRoot, 'logs')
 let fpB1 = ''
 let fpB2 = ''
 let fpB3 = ''
+let build = null //toolg/gDistRollup.mjs於副本之執行結果{ code, stdout, stderr }
+
+
+//umdRequires, 取umd檔工廠函式標頭(第一個「(this,function」之前)內之require("名")清單, 即該檔實際向外引用之模組
+function umdRequires(fp) {
+    let text = fs.readFileSync(fp, 'utf8')
+    let head = text.slice(0, text.indexOf('(this,function'))
+    return [...head.matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1])
+}
 
 
 //srcLines, 取src/*.mjs之非註解行
@@ -40,7 +50,7 @@ describe('WSyslog bundle', function() {
 
     before(async function() {
         kit.rmrf(fdRoot)
-        await kit.buildPkg(fdPkg)
+        build = await kit.buildPkg(fdPkg)
         kit.makeApp(fdApp, fdPkg)
         fs.mkdirSync(fdOther, { recursive: true })
         fpB1 = await kit.buildDownstream(fdApp, 'B1') //runin預設browser, 即四個w-web-*之設定
@@ -68,6 +78,40 @@ describe('WSyslog bundle', function() {
         assert.strict.equal(hits.length, 1, JSON.stringify(hits))
         assert.strict.equal(hits[0].fn, 'WSyslog.mjs')
         assert.ok(/^\s+/.test(hits[0].text), `import.meta.url須於函式內(縮排行), 實得: ${hits[0].text}`)
+    })
+
+    it('建置(R7): 副本內以cwd=副本根執行toolg/gDistRollup.mjs, 離開碼0且無無法解析/猜測名稱之警告', function() {
+        assert.strict.equal(build.code, 0, build.stderr)
+        let out = build.stdout + build.stderr
+        assert.ok(!/treating it as an external dependency|No name was provided|could not be resolved|Unresolved/i.test(out), `external/globals設定不全時rollup會警告: ${out}`)
+    })
+
+    it('建置(R7): dist產出三支umd與其sourcemap, 檔名為kebab-case, 且在副本根之dist(發布列相對cwd)', function() {
+        let fns = fs.readdirSync(path.join(fdPkg, 'dist')).sort()
+        assert.strict.deepEqual(fns, [
+            'formatter.umd.js',
+            'formatter.umd.js.map',
+            'resolve-formatter.umd.js',
+            'resolve-formatter.umd.js.map',
+            'w-syslog.umd.js',
+            'w-syslog.umd.js.map',
+        ])
+        let pkg = JSON.parse(fs.readFileSync(path.join(fdPkg, 'package.json'), 'utf8'))
+        assert.ok(fs.existsSync(path.join(fdPkg, pkg.main)), `package.json之main須存在: ${pkg.main}`)
+    })
+
+    it('建置(R5): pino為external(w-syslog.umd.js向外require pino而非內嵌), dist只向外引用node內建模組與pino', function() {
+        let builtin = new Set(builtinModules)
+        let all = {}
+        for (let fn of ['w-syslog', 'formatter', 'resolve-formatter']) {
+            all[fn] = umdRequires(path.join(fdPkg, 'dist', `${fn}.umd.js`))
+            let others = all[fn].filter((m) => !builtin.has(m) && m !== 'pino')
+            assert.strict.deepEqual(others, [], `${fn}.umd.js不應向外引用內建模組與pino以外之模組(其餘須已內嵌)`)
+        }
+        assert.ok(all['w-syslog'].includes('pino'), `w-syslog.umd.js須向外require pino, 實得: ${all['w-syslog']}`)
+        assert.ok(all['w-syslog'].includes('module'), `w-syslog.umd.js須向外require module(createRequire), 實得: ${all['w-syslog']}`)
+        assert.ok(all['formatter'].includes('worker_threads'), `formatter.umd.js須向外require worker_threads(回報事件), 實得: ${all['formatter']}`)
+        assert.ok(!all['formatter'].includes('pino'), 'formatter.umd.js不引用pino')
     })
 
     it('U6: 相對require由目前src建出之dist, 寫一筆並clear後落地', async function() {
