@@ -77,7 +77,7 @@ describe('WSyslog clear', function() {
         await log.clear()
 
         //clear已保證殘餘log全數寫出, 立即讀檔驗證
-        let vpfs = w.fsTreeFolder(fdLog)
+        let vpfs = w.fsTreeFolder(fdLog, { levelLimit: 1 })
         let fp = _.get(vpfs, `0.path`, '')
         let jj = fs.readFileSync(fp, 'utf8')
         let ss = w.sep(jj, '\n')

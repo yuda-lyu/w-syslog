@@ -65,7 +65,7 @@ let isFolder = (fd) => {
  *
  * await log.clear() //顯式關閉, flush殘餘log並終止transport worker, 之後不可再呼叫log方法
  *
- * let vpfs = w.fsTreeFolder('./_logs')
+ * let vpfs = w.fsTreeFolder('./_logs', { levelLimit: 1 }) //log檔皆直接位於fdLog下, 只列第1層
  * // console.log('vpfs', vpfs)
  *
  * let fp = _.get(vpfs, `0.path`, '')

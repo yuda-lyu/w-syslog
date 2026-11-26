@@ -74,3 +74,4 @@
 - 傳路徑給 node 一律 `C:/...`;曾誤用 git-bash 之 `/c/...` 導致 `require` 找不到檔(§11.3)。
 - 子代理之盤查結論要逐條核對,**且核對他 repo 時先分清 HEAD 與工作樹**:下游各 repo 常有其主責並行修改(未提交)。本次曾以 Grep 工作樹判定子代理之「四下游非測試碼皆未呼叫 `srLog.clear()`」不屬實,以 `git show HEAD:<path>` 核對後該句於 HEAD 成立,差異來自 w-web-api 主責之並行修改——撤回。對 dist 之結論以 HEAD 與已發布 dist 為準。
 - `npm pack --dry-run` 會把未追蹤之 `建議*.md` 納入發布包(主控於發布前移除)。
+- **wsemi 1.9.80 起列舉函數之第 2 參數為 opt**(2026-11-26):`w.fsTreeFolder(fd)` 省略第 2 參數由「只列第 1 層」變為「窮舉」,給數字拋 `invalid opt: must be an object`;本庫範例與測試取 log 檔處改為 `{ levelLimit: 1 }`(log 檔直接位於 fdLog 下,兩種寫法在此夾具下結果相同,明示層數以免日後夾具含子資料夾時取錯第 1 項)。重盤時「省略」之意義前後相反,須逐處判斷本意(規則帳本 R22)。

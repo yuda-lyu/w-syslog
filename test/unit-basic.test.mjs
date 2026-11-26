@@ -18,7 +18,7 @@ describe('WSyslog', function() {
 
         await log.clear() //顯式關閉, 保證殘餘log已全數寫出
 
-        let vpfs = w.fsTreeFolder('./_logs')
+        let vpfs = w.fsTreeFolder('./_logs', { levelLimit: 1 })
         // console.log('vpfs', vpfs)
 
         let fp = _.get(vpfs, `0.path`, '')

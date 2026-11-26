@@ -17,10 +17,12 @@
 | 自動清理(首次延後、clear 即停)、numKeep | R20 | `test/unit-cleanLogs.test.mjs` | 已套 |
 | timeZone 檔名 | R12 | `test/unit-timeZone.test.mjs` | 已套 |
 | 文件規則(clear 後呼叫之兩時段) | R21 | 無專屬測試 | 已套 |
+| 範例與測試以 wsemi 列舉 log 資料夾須明示層數(wsemi 1.9.80 起) | R22 | `test/unit-basic.test.mjs`、`test/unit-clear.test.mjs` | 已套(5 處皆 `{ levelLimit: 1 }`;`src/` 執行碼 0 處) |
 
 ## 測試
 
 - `npm test`(`mocha --parallel "test/*.test.mjs" --timeout 180000`):2026-11-02 sys267 改後 57 案(改前 54 案;`unit-bundle` 13 → 16)。
+- 最近一次驗證:2026-11-26(本機 Windows、wsemi 1.9.80):全套 57 案全數通過(R22 遷移後)。
 
 ## 已知缺口與待辦
 

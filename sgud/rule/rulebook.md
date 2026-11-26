@@ -2,7 +2,7 @@
 
 本檔為套件設計與開發階段之規則帳本,為要求程式碼須長成什麼樣,或由規格產出之測試(項目/說明/流程)有哪些,包含軸、單一擁有者、已知限制、破壞性變更紀錄,以及對應是哪些測試檔案或指令等,由agent自行編列、擴充與維護.
 
-- 建立:2026-10-14(任務 20261014041244 run02);依據:`C:\opensrcOper\dnow\20261014041244\agent-out\run01-審計回應.md` §10 之提案 R1~R16、主控複審 `review\run01-複審.md` 之裁示(D-2 採 ④'、D-3 (c)、D-11 (a) 等)。
+- 建立:2026-10-14(任務 20261014041244 run02);依據:主控任務資料夾內 run01 之審計回應 §10 之提案 R1~R16、主控複審 run01 之裁示(D-2 採 ④'、D-3 (c)、D-11 (a) 等)。
 - 修訂:2026-10-14 run03,依主控複審 run02 之裁示,寫檔失敗與 transport 錯誤之事件由 `'error'` 改為 `writeError`(R8 規則三),新增 R19(事件一名一義)。
 - 修訂:2026-10-14 run04,依主控複審 run03 之裁示,新增 R20(首次清理延後到 `WSyslog()` 回傳後、`clear()` 呼叫即停止自動清理)與 R21(clear 後呼叫 log 方法之兩個時段須於文件區分)。
 - 修訂:2026-11-02 sys267,依 dspec〈自有套件之發布與建置腳本〉:撤除 `toolg/distRollupOpt.mjs`(選項寫回 `toolg/gDistRollup.mjs`),R7 由「共用設定」改為「測試以副本執行發布之建置腳本」;本檔不再立 toolg 寫法之規則,`toolg/` 依該 dspec。
@@ -178,6 +178,14 @@
 - 盤點:`git grep -n "writeError" -- README.md src/WSyslog.mjs`(判準:README〈Usage〉與 JSDoc 各有一句區分兩時段)。
 - 測試:無專屬測試(文件規則);行為由 `test/unit-clear.test.mjs`「clear後再寫log」與 run03 探測涵蓋。
 
+### R22 範例與測試以 wsemi 列舉 log 資料夾時須明示層數(wsemi 1.9.80 起)
+
+- 規則:wsemi 1.9.80 起 `fsTreeFolder` 等列舉函數之第 2 參數為 opt 物件,**未給 `opt.levelLimit` 即窮舉全部層級**(舊版省略為只列第 1 層),給數字拋 `invalid opt: must be an object`。本庫 log 檔由 formatter 以 `path.join(fdLog, '<timeKey>.log')` 直接置於 fdLog 下、無子資料夾,範例與測試取 log 檔時一律寫 `{ levelLimit: 1 }`(保持只列第 1 層之語意),不給第 2 參數、不給數字。
+- 本庫 `src/` 之執行碼不呼叫 wsemi 之列舉函數(0 處),只有 JSDoc 範例、README、根目錄範例與測試。
+- 盤點:`git grep -nE "\b(fsTreeFolder|fsTreeFolderWithHash|fsGetFilesInFolder|fsGetFilesWithHashInFolder|fsGetFoldersInFolder)(Core)?\s*\(" -- . ':!dist' ':!docs'`(判準:每處第 2 參數皆為 `{ levelLimit: 1 }`)。
+- 站點全集(2026-11-26):`src/WSyslog.mjs:68`(JSDoc 範例)、`README.md:38`、`g.mjs:20`、`test/unit-basic.test.mjs:21`、`test/unit-clear.test.mjs:80`,皆已套。
+- 測試:`test/unit-basic.test.mjs`、`test/unit-clear.test.mjs`(列舉後以第 1 項為 log 檔讀回內容並逐行比對)。
+
 ## 三、站點狀態(2026-10-14 run02 實作後,以 §二之盤點指令實跑)
 
 | 規則 | 站點 | 狀態 |
@@ -203,6 +211,7 @@
 | R19 | `src/WSyslog.mjs:173`(`writeError`)、:229(`'delete'`)、:337(等級事件,`wrap` 經 :348-353 套六等級);文件站點 `src/WSyslog.mjs:52`(JSDoc)、`README.md:59-65`〈Errors〉;盤點 `emit('error'` 0 筆(2026-10-14 run04 重跑) | 已套 |
 | R20 | 首次清理 `src/WSyslog.mjs:245-248`(唯一一處 `setImmediate` 排程,其內 :247 為 src 唯一之 `cleanLogs()` 呼叫);每小時 :251-253;`stopAutoClean` :257-263(`clearImmediate` 與 `clearInterval` 只在此);clear 開頭 :273 呼叫一次;fin 內已無 `clearInterval`;文件站點 `src/WSyslog.mjs:52`、`README.md:75`〈Notes〉 | 已套 |
 | R21 | `src/WSyslog.mjs:52`(JSDoc,clear 進行中/完成後)、:266-267(clear 之註解);`README.md:54`〈Usage〉 | 已套 |
+| R22 | `src/WSyslog.mjs:68`(JSDoc 範例)、`README.md:38`、`g.mjs:20`、`test/unit-basic.test.mjs:21`、`test/unit-clear.test.mjs:80`(2026-11-26 盤點 5 處,皆 `{ levelLimit: 1 }`) | 已套 |
 
 ## 三之一、測試對照(`npm test`:`mocha --parallel "test/*.test.mjs" --timeout 180000`)
 
